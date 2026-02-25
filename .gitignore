@@ -1,10 +1,23 @@
-__pycache__/
-data/*.csv
+# --- Mac/OS Junk ---
 .DS_Store
+.AppleDouble
+.LSOverride
+
+# --- Python Cache ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Virtual Environments ---
 .venv/
 venv/
 env/
 ENV/
-bin/
-lib/
-include/
+
+# --- Data ---
+# Ignore the actual data but allow the folder via .gitkeep
+data/*.csv
+
+# --- IDEs ---
+.vscode/
+.idea/

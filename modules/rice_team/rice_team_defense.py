@@ -20,8 +20,7 @@ def shots_against_server(input, output, session, filtered_events):
             pitch_type='wyscout',
             pitch_color='#aabb97',
             line_color='white',
-            half=True,
-            flip_y=True
+            half=False
         )
         fig, ax = pitch.draw(figsize=(5, 7))
 
@@ -43,6 +42,17 @@ def shots_against_server(input, output, session, filtered_events):
                     label=label
                 )
 
+        ax.set_xlim(14, 86)
+        ax.set_ylim(-2, 20)
+        
         ax.set_title("Shots Against (Own Half)", fontsize=15)
         ax.legend(loc="upper right")
         return fig
+
+def defense_ui():
+    return ui.div(
+        shots_against_ui(),
+    )
+
+def defense_server(input, output, session, filtered_events):
+    shots_against_server(input, output, session, filtered_events)

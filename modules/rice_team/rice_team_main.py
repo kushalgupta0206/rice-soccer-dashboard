@@ -2,7 +2,7 @@ import pandas as pd
 from pathlib import Path
 from shiny import ui, render, reactive
 from . import rice_team_attack as attack
-from . import rice_team_defence as defence
+from . import rice_team_defense as defense
 from . import rice_team_setpiece as setpiece
 
 def get_match_choices():
@@ -29,7 +29,7 @@ def ui_content():
                     "Area:",
                     choices={
                         "Attack": "Attack",
-                        "Defence": "Defence",
+                        "Defense": "Defense",
                         "Set-Pieces": "Set-Pieces"
                     }
                 ),
@@ -38,11 +38,7 @@ def ui_content():
                 style="min-height: 800px; padding: 20px;"
             ),
             ui.output_text_verbatim("debug_selection_rice_team"),
-            ui.output_text_verbatim("debug_selection_rice_team"),
-            attack.attack_ui(),
-            shots.shots_ui(),
-            shots_against.shots_against_ui(),
-            free_kicks.free_kicks_ui(),
+            ui.output_ui("dynamic_content_rice_team"),
         ),
         value="tab_1_val"
     )
@@ -57,17 +53,18 @@ def server_logic(input, output, session):
         if not selected:
             return pd.DataFrame()
         return event_df[event_df["wy_match_id"].astype(str).isin(selected)]
-
+    
+    @output
     @render.ui
     def dynamic_content_rice_team():
         area = input.selected_rice_team_area()
         if area == "Attack":
             return attack.attack_ui()
-        elif area == "Defence":
-            return defence.defence_ui()
+        elif area == "Defense":
+            return defense.defense_ui()
         elif area == "Set-Pieces":
             return setpiece.setpiece_ui()
 
     attack.attack_server(input, output, session, filtered_events)
-    defence.defence_server(input, output, session, filtered_events)
+    defense.defense_server(input, output, session, filtered_events)
     setpiece.setpiece_server(input, output, session, filtered_events)

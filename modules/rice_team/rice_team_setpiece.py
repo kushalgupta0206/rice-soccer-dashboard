@@ -52,3 +52,11 @@ def free_kicks_server(input, output, session, filtered_events):
         ax.set_title("Free Kick Locations", fontsize=15)
         ax.legend(loc="upper right")
         return fig
+
+def setpiece_ui():
+    return ui.div(
+        free_kicks_ui(),
+    )
+
+def setpiece_server(input, output, session, filtered_events):
+    free_kicks_server(input, output, session, filtered_events)

@@ -53,3 +53,11 @@ def shots_server(input, output, session, filtered_events):
         ax.set_title("Shot Map (Opponent Half)", fontsize=15)
         ax.legend(loc="upper right")
         return fig
+
+def attack_ui():
+    return ui.div(
+        shots_ui(),
+    )
+
+def attack_server(input, output, session, filtered_events):
+    shots_server(input, output, session, filtered_events)

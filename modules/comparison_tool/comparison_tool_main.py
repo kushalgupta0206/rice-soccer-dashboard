@@ -1,6 +1,7 @@
 import pandas as pd
 from pathlib import Path
 from shiny import ui, render, reactive
+from . import comparison_tool_general as general
 
 def get_team_id():
     data_path = Path(__file__).parent.parent.parent / "data" / "american_athletic_womens_soccer_fall_2025_team_data.csv"
@@ -18,6 +19,18 @@ def get_player_name(team_id):
 
 def load_match_data():
     data_path = Path(__file__).parent.parent.parent / "data" / "american_athletic_womens_soccer_fall_2025_match_data.csv"
+    return pd.read_csv(data_path)
+
+def load_team_data():
+    data_path = Path(__file__).parent.parent.parent / "data" / "american_athletic_womens_soccer_fall_2025_team_data.csv"
+    return pd.read_csv(data_path)
+
+def load_player_data():
+    data_path = Path(__file__).parent.parent.parent / "data" / "american_athletic_womens_soccer_fall_2025_player_data.csv"
+    return pd.read_csv(data_path)
+
+def load_team_player_duels_data():
+    data_path = Path(__file__).parent.parent.parent / "data" / "american_athletic_womens_soccer_fall_2025_team_player_match_duels.csv"
     return pd.read_csv(data_path)
 
 def load_player_match_map():
@@ -61,7 +74,7 @@ def ui_content():
                 style="padding: 20px; background-color: #f8f9fa; border-bottom: 2px solid #dee2e6;"
             ),
             ui.div(
-                ui.output_text_verbatim("debug_comparison"),
+                ui.output_ui("dynamic_comparison_ui"),
                 style="padding: 20px;"
             )
         ),
@@ -69,6 +82,9 @@ def ui_content():
     )
 
 def server_logic(input, output, session):
+    team_player_duels_df = load_team_player_duels_data()
+    team_df = load_team_data()
+    player_df = load_player_data()
     team_choices = get_team_id()
     initial_team = list(team_choices.keys())[0] if team_choices else None
     
@@ -231,23 +247,75 @@ def server_logic(input, output, session):
                     selected=None
                 )
     
-    @render.text
-    def debug_comparison():
+    @reactive.calc
+    def filtered_comparison_data():
         comp_type = input.comparison_type()
-        try:
-            if comp_type == "team":
-                team_1 = input.comp_team_1()
-                team_1_matches = input.comp_team_1_matches()
-                team_2 = input.comp_team_2()
-                team_2_matches = input.comp_team_2_matches()
-                return f"Comparison Type: {comp_type}\nTeam 1: {team_1}\nTeam 1 Matches: {team_1_matches}\nTeam 2: {team_2}\nTeam 2 Matches: {team_2_matches}"
-            else:
-                team_1 = input.comp_player_team_1()
-                player_1 = input.comp_player_1()
-                player_1_matches = input.comp_player_1_matches()
-                team_2 = input.comp_player_team_2()
-                player_2 = input.comp_player_2()
-                player_2_matches = input.comp_player_2_matches()
-                return f"Comparison Type: {comp_type}\nTeam 1: {team_1}, Player 1: {player_1}\nPlayer 1 Matches: {player_1_matches}\nTeam 2: {team_2}, Player 2: {player_2}\nPlayer 2 Matches: {player_2_matches}"
-        except:
-            return f"Comparison Type: {comp_type}\n(Select options above)"
+
+        if comp_type == "team":
+            group_col = "wy_team_id"
+            entities = [
+                {"id": input.comp_team_1(), "matches": input.comp_team_1_matches(), "label": "Entity_1"},
+                {"id": input.comp_team_2(), "matches": input.comp_team_2_matches(), "label": "Entity_2"}
+            ]
+        else:
+            group_col = "wy_player_id"
+            entities = [
+                {"id": input.comp_player_1(), "matches": input.comp_player_1_matches(), "label": "Entity_1"},
+                {"id": input.comp_player_2(), "matches": input.comp_player_2_matches(), "label": "Entity_2"}
+            ]
+
+        processed_results = []
+
+        for ent in entities:
+            c_id = int(float(ent["id"])) if ent["id"] else None
+            
+            c_matches = []
+            raw_m = ent["matches"]
+            if isinstance(raw_m, (tuple, list)):
+                c_matches = [int(float(m)) for m in raw_m if m]
+            elif raw_m:
+                c_matches = [int(float(raw_m))]
+
+            temp_df = team_player_duels_df[
+                (team_player_duels_df[group_col] == c_id) & 
+                (team_player_duels_df["wy_match_id"].isin(c_matches))
+            ]
+
+            agg_df = temp_df.groupby(group_col).agg(
+                total_off_duels=("offensive_duels_count", "sum"),
+                total_def_duels=("defensive_duels_count", "sum"),
+                total_ground_kept=("ground_duel_kept_possession_count", "sum"),
+                total_ground_prog=("ground_duel_progressed_with_ball_count", "sum"),
+                total_ground_rec=("ground_duel_recovered_possession_count", "sum"),
+                total_ground_stop=("ground_duel_stopped_progress_count", "sum"),
+                total_aerial_touch=("aerial_duel_first_touch_count", "sum"),
+                total_aerial_count=("aerial_duel_count", "sum")
+            ).reset_index()
+
+            agg_df["comparison_label"] = ent["label"]
+            processed_results.append(agg_df)
+
+        df_final = pd.concat(processed_results).fillna(0)
+
+        df_final["ground_kept_pct"] = df_final["total_ground_kept"] / df_final["total_off_duels"]
+        df_final["ground_prog_pct"] = df_final["total_ground_prog"] / df_final["total_off_duels"]
+        df_final["ground_rec_pct"] = df_final["total_ground_rec"] / df_final["total_def_duels"]
+        df_final["ground_stop_pct"] = df_final["total_ground_stop"] / df_final["total_def_duels"]
+        df_final["aerial_win_pct"] = df_final["total_aerial_touch"] / df_final["total_aerial_count"]
+        
+        df_final = df_final.fillna(0)
+        if input.comparison_type() == "team":
+            df_final_joined = df_final.merge(team_df, on="wy_team_id", how="left")
+        else:
+            df_final_joined = df_final.merge(player_df, on="wy_player_id", how="left")
+        
+        return {
+            "data": df_final_joined,
+            "name_col": "wy_team_name" if input.comparison_type() == "team" else "wy_player_name"
+        }
+
+    @render.ui
+    def dynamic_comparison_ui():
+        return general.general_ui()
+
+    general.general_server(input, output, session, filtered_comparison_data)

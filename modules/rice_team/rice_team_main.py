@@ -37,7 +37,6 @@ def ui_content():
                 width="400px",
                 style="min-height: 800px; padding: 20px;"
             ),
-            ui.output_text_verbatim("debug_selection_rice_team"),
             ui.output_ui("dynamic_content_rice_team"),
         ),
         value="tab_1_val"

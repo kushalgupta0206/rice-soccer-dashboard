@@ -2,6 +2,7 @@ from shiny import ui, render
 import matplotlib.pyplot as plt
 from mplsoccer import VerticalPitch, Pitch
 import numpy as np
+import pandas as pd
 
 def shots_ui():
     return ui.div(
@@ -190,13 +191,74 @@ def progressive_runs_server(input, output, session, filtered_events):
         ax.set_title(f"Progressive Run Map (n={len(prog_df)})", fontsize=15)
         return fig
 
+def xg_accumulator_ui():
+    return ui.div(
+        ui.output_plot("xg_accumulator_plot")
+    )
+
+
+def xg_accumulator_ui():
+    return ui.div(
+        ui.output_plot("xg_accumulator_plot")
+    )
+
+
+def xg_accumulator_server(input, output, session, filtered_events):
+    @render.plot
+    def xg_accumulator_plot():
+        df = filtered_events()
+        if df is None or df.empty:
+            return None
+
+        shots_df = df[
+            (df["type_primary"] == "shot") &
+            (df["shot_post_shot_xg"].notna())
+        ].copy()
+
+        shots_df["minute_decimal"] = shots_df["minute"] + shots_df["second"] / 60
+        shots_df["shot_post_shot_xg"] = pd.to_numeric(shots_df["shot_post_shot_xg"], errors="coerce")
+
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.set_facecolor("#f9f9f9")
+        fig.patch.set_facecolor("#f9f9f9")
+
+        for match_id, match_df in shots_df.groupby("wy_match_id"):
+            match_df = match_df.sort_values("minute_decimal")
+            match_df["cumulative_xg"] = match_df["shot_post_shot_xg"].cumsum()
+
+            label = f"Rice vs. {match_df['opponent_team_name'].iloc[0]}"
+
+            minutes = [0] + list(match_df["minute_decimal"]) + [90]
+            cumxg   = [0] + list(match_df["cumulative_xg"]) + [match_df["cumulative_xg"].iloc[-1]]
+
+            line, = ax.step(minutes, cumxg, where="post", linewidth=2, label=label)
+
+            goals = match_df[match_df["shot_is_goal"].astype(str).str.upper() == "TRUE"]
+            for _, goal in goals.iterrows():
+                ax.axvline(
+                    x=goal["minute_decimal"],
+                    color=line.get_color(),
+                    linestyle="--",
+                    linewidth=1.2,
+                    alpha=0.7
+                )
+
+        ax.set_xlabel("Minute", fontsize=12)
+        ax.set_ylabel("Cumulative xG", fontsize=12)
+        ax.set_title("xG Accumulator", fontsize=15)
+        ax.legend(loc="upper left", fontsize=9)
+        ax.grid(True, alpha=0.3)
+
+        return fig
+
 def attack_ui():
     return ui.div(
         shots_ui(),
         progressive_passes_ui(),
         final_third_passes_ui(),
         progressive_runs_ui(),
-        attack_heatmap_ui()
+        attack_heatmap_ui(),
+        xg_accumulator_ui(),
     )
 
 def attack_server(input, output, session, filtered_events):
@@ -205,3 +267,4 @@ def attack_server(input, output, session, filtered_events):
     final_third_passes_server(input, output, session, filtered_events)
     progressive_runs_server(input, output, session, filtered_events)
     attack_heatmap_server(input, output, session, filtered_events)
+    xg_accumulator_server(input, output, session, filtered_events)

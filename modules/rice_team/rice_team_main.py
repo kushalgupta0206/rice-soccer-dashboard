@@ -51,7 +51,8 @@ def server_logic(input, output, session):
         selected = input.selected_rice_matches()
         if not selected:
             return pd.DataFrame()
-        return event_df[event_df["wy_match_id"].astype(str).isin(selected)]
+        df = event_df[event_df["wy_match_id"].astype(str).isin(selected)]
+        return df[df["wy_team_id"] == 61585]
     
     @output
     @render.ui

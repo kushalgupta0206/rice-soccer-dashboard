@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 from mplsoccer import VerticalPitch, Pitch
 import numpy as np
 import pandas as pd
+from .original_stats import get_key_passes, get_possessions_with_shot, get_shots_by_15_min
+
 
 def shots_ui():
     return ui.div(
@@ -197,12 +199,6 @@ def xg_accumulator_ui():
     )
 
 
-def xg_accumulator_ui():
-    return ui.div(
-        ui.output_plot("xg_accumulator_plot")
-    )
-
-
 def xg_accumulator_server(input, output, session, filtered_events):
     @render.plot
     def xg_accumulator_plot():
@@ -251,6 +247,108 @@ def xg_accumulator_server(input, output, session, filtered_events):
 
         return fig
 
+def key_passes_ui():
+    return ui.div(
+        ui.output_plot("key_passes_plot")
+    )
+ 
+def key_passes_server(input, output, session, filtered_events):
+    @render.plot
+    def key_passes_plot():
+        df = filtered_events()
+        if df is None or df.empty:
+            return None
+ 
+        kp = get_key_passes(df)
+ 
+        pitch = Pitch(pitch_type="wyscout", pitch_color="#aabb97", line_color="white")
+        fig, ax = pitch.draw(figsize=(10, 7))
+ 
+        if kp.empty:
+            ax.set_title("Key Passes", fontsize=15)
+            return fig
+ 
+        pitch.arrows(
+            kp["location_x"],          kp["location_y"],
+            kp["pass_end_location_x"], kp["pass_end_location_y"],
+            width=1, headwidth=5, headlength=5,
+            color="black", alpha=0.6, ax=ax,
+        )
+ 
+        ax.set_title(f"Key Passes (n={len(kp)})", fontsize=15)
+        return fig
+ 
+ 
+def possession_with_shot_ui():
+    return ui.div(
+        ui.output_plot("possession_with_shot_plot")
+    )
+ 
+def possession_with_shot_server(input, output, session, filtered_events):
+    @render.plot
+    def possession_with_shot_plot():
+        df = filtered_events()
+        if df is None or df.empty:
+            return None
+ 
+        poss = get_possessions_with_shot(df)
+        starts = poss.sort_values("timestamp").groupby("possession_id").first().reset_index()
+ 
+        pitch = Pitch(pitch_type="wyscout", pitch_color="#aabb97", line_color="white")
+        fig, ax = pitch.draw(figsize=(10, 7))
+ 
+        if starts.empty:
+            ax.set_title("Possession Start Locations (Led to Shot)", fontsize=15)
+            return fig
+ 
+        pitch.scatter(
+            starts["location_x"], starts["location_y"],
+            s=120, color="white", edgecolors="black",
+            linewidths=1.2, zorder=4, ax=ax,
+        )
+ 
+        ax.set_title(f"Possession Start Locations — Led to Shot (n={len(starts)})", fontsize=15)
+        return fig
+
+def shots_by_15_ui():
+    return ui.div(
+        ui.output_plot("shots_by_15_plot")
+    )
+ 
+def shots_by_15_server(input, output, session, filtered_events):
+    @render.plot
+    def shots_by_15_plot():
+        df = filtered_events()
+        if df is None or df.empty:
+            return None
+ 
+        data = get_shots_by_15_min(df)
+ 
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.set_facecolor("#f9f9f9")
+        fig.patch.set_facecolor("#f9f9f9")
+ 
+        x_labels = ["0-15", "16-30", "31-45", "46-60", "61-75", "76-90"]
+        x_pos = {label: i for i, label in enumerate(x_labels)}
+ 
+        for match_id, match_df in data.groupby("wy_match_id"):
+            label = f"Rice vs. {match_df['opponent_team_name'].iloc[0]}"
+            x = [x_pos[p] for p in match_df["period_15"].astype(str)]
+            y = list(match_df["shots"])
+            ax.plot(x, y, linewidth=2, marker="o", markersize=6, label=label)
+ 
+        ax.set_xticks(range(len(x_labels)))
+        ax.set_xticklabels(x_labels)
+        ax.legend(loc="upper left", fontsize=9)
+ 
+        ax.set_xlabel("Minute", fontsize=12)
+        ax.set_ylabel("Shots", fontsize=12)
+        ax.set_title("Shots by 15 Minute Interval", fontsize=15)
+        ax.grid(True, alpha=0.3, axis="y")
+ 
+        return fig
+ 
+ 
 def attack_ui():
     return ui.div(
         shots_ui(),
@@ -259,8 +357,11 @@ def attack_ui():
         progressive_runs_ui(),
         attack_heatmap_ui(),
         xg_accumulator_ui(),
+        key_passes_ui(),
+        possession_with_shot_ui(),
+        shots_by_15_ui(),
     )
-
+ 
 def attack_server(input, output, session, filtered_events):
     shots_server(input, output, session, filtered_events)
     progressive_passes_server(input, output, session, filtered_events)
@@ -268,3 +369,6 @@ def attack_server(input, output, session, filtered_events):
     progressive_runs_server(input, output, session, filtered_events)
     attack_heatmap_server(input, output, session, filtered_events)
     xg_accumulator_server(input, output, session, filtered_events)
+    key_passes_server(input, output, session, filtered_events)
+    possession_with_shot_server(input, output, session, filtered_events)
+    shots_by_15_server(input, output, session, filtered_events)

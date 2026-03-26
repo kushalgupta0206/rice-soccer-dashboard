@@ -28,7 +28,6 @@ def get_key_passes(df):
 
     return pd.DataFrame(key_passes)
 
-
 def get_possessions_with_shot(df):
     shots = df[df["type_primary"] == "shot"]
  

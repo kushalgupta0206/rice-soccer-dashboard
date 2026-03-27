@@ -73,7 +73,7 @@ def ui_content():
 def server_logic(input, output, session):
     event_df = load_event_data()
     match_df = load_match_data()
-    map_df = load_player_match_map(    )
+    map_df = load_player_match_map()
     
     @reactive.Effect
     @reactive.event(input.selected_rice_player)

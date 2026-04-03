@@ -52,12 +52,16 @@ def attack_server(input, output, session, filtered_events):
         fig, ax = pitch.draw(figsize=(10, 7))
 
         if not key_pass_df.empty:
-            pitch.scatter(
-                key_pass_df["pass_end_location_x"], 
+            pitch.arrows(
+                key_pass_df["location_x"], 
+                key_pass_df["location_y"],  
+                key_pass_df["pass_end_location_x"],
                 key_pass_df["pass_end_location_y"], 
                 ax=ax, 
+                width=2,  
+                headwidth=3,   
+                headlength=5, 
                 color="blue", 
-                edgecolors="black", 
                 label="Key Passes"
             )
             ax.legend(loc='upper right')

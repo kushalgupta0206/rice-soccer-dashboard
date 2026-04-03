@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 from mplsoccer import VerticalPitch, Pitch
 import numpy as np
 import pandas as pd
-# from .original_stats import get_key_passes, get_possessions_with_shot, get_shots_by_15_min
 
 def parse_timestamp(t):
     parts = str(t).split(":")

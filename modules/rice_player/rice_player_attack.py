@@ -4,7 +4,8 @@ from mplsoccer import Pitch
 
 def attack_ui():
     return ui.div(
-        ui.output_plot("loss_scatter_plot")
+        ui.output_plot("loss_scatter_plot"),
+        ui.output_plot("key_pass_scatter_plot")
     )
 
 def attack_server(input, output, session, filtered_events):
@@ -34,4 +35,31 @@ def attack_server(input, output, session, filtered_events):
             ax.legend(loc='upper right')
         
         ax.set_title("End Locations of Failed Passes", fontsize=15)
+        return fig
+
+    @render.plot
+    def key_pass_scatter_plot():
+        df = filtered_events()
+        if df is None or df.empty:
+            return None
+        
+        key_pass_df = df[
+            (df["type_primary"] == "pass") & 
+            (df["type_secondary"].str.contains("key", case=False, na=False))
+        ]
+        
+        pitch = Pitch(pitch_type='wyscout', pitch_color='#aabb97', line_color='white') 
+        fig, ax = pitch.draw(figsize=(10, 7))
+
+        if not key_pass_df.empty:
+            pitch.scatter(
+                key_pass_df["pass_end_location_x"], 
+                key_pass_df["pass_end_location_y"], 
+                ax=ax, 
+                color="blue", 
+                edgecolors="black", 
+                label="Key Passes"
+            )
+            ax.legend(loc='upper right')
+        ax.set_title("End Locations of Key Passes", fontsize=15)
         return fig

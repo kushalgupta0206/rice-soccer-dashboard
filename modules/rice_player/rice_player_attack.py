@@ -44,8 +44,9 @@ def attack_server(input, output, session, filtered_events):
             return None
         
         key_pass_df = df[
-            (df["type_primary"] == "pass") & 
-            (df["type_secondary"].str.contains("key", case=False, na=False))
+            (df["type_primary"] == "pass") 
+            # & 
+            # (df["type_secondary"].str.contains("key", case=False, na=False))
         ]
         
         pitch = Pitch(pitch_type='wyscout', pitch_color='#aabb97', line_color='white') 
@@ -65,5 +66,5 @@ def attack_server(input, output, session, filtered_events):
                 label="Key Passes"
             )
             ax.legend(loc='upper right')
-        ax.set_title("End Locations of Key Passes", fontsize=15)
+        ax.set_title("Passes", fontsize=15)
         return fig

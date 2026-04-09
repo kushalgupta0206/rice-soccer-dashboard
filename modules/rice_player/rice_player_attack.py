@@ -5,19 +5,21 @@ from mplsoccer import Pitch
 def attack_ui():
     return ui.div(
         ui.output_plot("loss_scatter_plot"),
-        ui.output_plot("key_pass_scatter_plot")
+        ui.output_plot("pass_map_plot")
     )
 
 def attack_server(input, output, session, filtered_events):
     @render.plot
     def loss_scatter_plot():
+        player_id = input.selected_rice_player()
         df = filtered_events()
-        if df is None or df.empty:
+        df_filtered = df[df['wy_player_id'] == int(float(player_id))]
+        if df_filtered is None or df_filtered.empty:
             return None
         
-        loss_df = df[
-            (df["type_primary"] == "pass") & 
-            (df["type_secondary"].str.contains("loss", case=False, na=False))
+        loss_df = df_filtered[
+            (df_filtered["type_primary"] == "pass") & 
+            (df_filtered["type_secondary"].str.contains("loss", case=False, na=False))
         ]
 
         pitch = Pitch(pitch_type='wyscout', pitch_color='#aabb97', line_color='white')
@@ -38,13 +40,15 @@ def attack_server(input, output, session, filtered_events):
         return fig
 
     @render.plot
-    def key_pass_scatter_plot():
+    def pass_map_plot():
+        player_id = input.selected_rice_player()
         df = filtered_events()
-        if df is None or df.empty:
+        df_filtered = df[df['wy_player_id'] == int(float(player_id))]
+        if df_filtered is None or df_filtered.empty:
             return None
         
-        key_pass_df = df[
-            (df["type_primary"] == "pass") 
+        key_pass_df = df_filtered[
+            (df_filtered["type_primary"] == "pass") 
             # & 
             # (df["type_secondary"].str.contains("key", case=False, na=False))
         ]

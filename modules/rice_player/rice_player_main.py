@@ -102,7 +102,8 @@ def server_logic(input, output, session):
             return pd.DataFrame()
             
         return event_df[
-            (event_df["wy_player_id"] == int(float(player_id))) & 
+            # (event_df["wy_player_id"] == int(float(player_id))) 
+            # & 
             (event_df["wy_match_id"].astype(str).isin(selected_matches))
         ]
     

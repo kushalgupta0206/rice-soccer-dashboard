@@ -1,28 +1,34 @@
 import pandas as pd
 from pathlib import Path
 from shiny import ui, render, reactive
+from . import opponent_team_attack as attack
+from . import opponent_team_setpiece as set_pieces
 
-def get_opp_team_id():
-    data_path = Path(__file__).parent.parent.parent / "data" / "american_athletic_womens_soccer_fall_2025_team_data.csv"
-    df = pd.read_csv(data_path)
-    return dict(zip(df["wy_team_id"].astype(str), df["wy_team_name"]))
+def load_all_data():
+    base_path = Path(__file__).parent.parent.parent / "data"
+    team_df = pd.read_csv(base_path / "american_athletic_womens_soccer_fall_2025_team_data.csv")
+    event_df = pd.read_csv(base_path / "american_athletic_womens_soccer_fall_2025_event_data_selected_cols.csv")
+    match_df = pd.read_csv(base_path / "american_athletic_womens_soccer_fall_2025_match_data.csv")
+    
 
-def load_match_data():
-    data_path = Path(__file__).parent.parent.parent / "data" / "american_athletic_womens_soccer_fall_2025_match_data.csv"
-    return pd.read_csv(data_path)
+    team_dict = dict(zip(team_df["wy_team_id"].astype(str), team_df["wy_team_name"]))
+    return team_dict, event_df, match_df
+
+
+opp_team_choices, event_df, match_df = load_all_data()
 
 def get_match_choices_for_team(df, team_id):
-    if team_id is None:
+   
+    if not team_id: 
         return {}
+    
     team_id = int(float(team_id))
     team_matches = df[(df["home_team_id"].astype(float) == team_id) | (df["away_team_id"].astype(float) == team_id)]
     return dict(zip(team_matches["wy_match_id"].astype(str), team_matches["label_date"]))
 
 def ui_content():
-    opp_team_choices = get_opp_team_id()
-    df = load_match_data()
     initial_team = list(opp_team_choices.keys())[0] if opp_team_choices else None
-    initial_matches = get_match_choices_for_team(df, initial_team) if initial_team else {}
+    initial_matches = get_match_choices_for_team(match_df, initial_team) if initial_team else {}
     
     return ui.nav_panel(
         "Opponent Team",
@@ -53,28 +59,49 @@ def ui_content():
                 width="400px",
                 style="min-height: 800px; padding: 20px;"
             ),
-            ui.output_text_verbatim("debug_selection_opp_team"),
+            ui.output_ui("dynamic_content_opp_team")
         ),
         value="tab_3_val"
     )
 
 def server_logic(input, output, session):
-    df = load_match_data()
     
     @reactive.Effect
     @reactive.event(input.selected_opp_team)
     def update_match_choices():
         team_id = input.selected_opp_team()
         if team_id:
-            new_choices = get_match_choices_for_team(df, team_id)
+            new_choices = get_match_choices_for_team(match_df, team_id)
             ui.update_selectize(
                 "selected_opp_matches",
                 choices=new_choices,
-                selected=None
+                selected=[] 
             )
-    
-    @render.text
-    def debug_selection_opp_team():
+            
+    @reactive.calc
+    def filtered_team_events():
         team_id = input.selected_opp_team()
-        match_ids = input.selected_opp_matches()
-        return f"Selected Opponent Team: {team_id}\nSelected Match IDs: {match_ids}"
+        selected_matches = input.selected_opp_matches()
+        
+      
+        if not team_id or not selected_matches:
+            return pd.DataFrame()
+           
+        filtered_events = event_df[
+            (event_df["wy_team_id"] == int(float(team_id))) & 
+            (event_df["wy_match_id"].astype(str).isin(selected_matches))
+        ]
+        return filtered_events
+
+    @render.ui
+    def dynamic_content_opp_team():
+        area = input.selected_opp_team_area()
+        if area == "Attack":
+            return attack.attack_ui()
+        elif area == "Set-Pieces":
+            return set_pieces.set_pieces_ui()        
+        else:
+            return ui.div(ui.h3("Content for Defence will go here.")) 
+            
+    attack.attack_server(input, output, session, filtered_team_events, event_df, opp_team_choices)
+    set_pieces.set_pieces_server(input, output, session, filtered_team_events)

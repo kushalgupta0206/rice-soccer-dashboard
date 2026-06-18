@@ -2,6 +2,9 @@ from shiny import ui, render
 import matplotlib.pyplot as plt
 from mplsoccer import Pitch
 
+def _no_plot_data(player_id, df):
+    return not player_id or df is None or df.empty
+
 def attack_ui():
     return ui.div(
         ui.output_plot("loss_scatter_plot"),
@@ -14,8 +17,10 @@ def attack_server(input, output, session, filtered_events):
     def loss_scatter_plot():
         player_id = input.selected_rice_player()
         df = filtered_events()
+        if _no_plot_data(player_id, df):
+            return None
         df_filtered = df[df['wy_player_id'] == int(float(player_id))]
-        if df_filtered is None or df_filtered.empty:
+        if df_filtered.empty:
             return None
         
         loss_df = df_filtered[
@@ -42,13 +47,12 @@ def attack_server(input, output, session, filtered_events):
 
     @render.plot
     def pass_map_plot():
-        #getting th player id of the player theh user has selected
         player_id = input.selected_rice_player()
-        # filtered_events() = all event data filtered by match_id that the user selects 
         df = filtered_events()
-        # filtering the df to get only those events of the player selected 
+        if _no_plot_data(player_id, df):
+            return None
         df_filtered = df[df['wy_player_id'] == int(float(player_id))]
-        if df_filtered is None or df_filtered.empty:
+        if df_filtered.empty:
             return None
         #all passes made by the selcted player
         key_pass_df = df_filtered[
@@ -81,26 +85,25 @@ def attack_server(input, output, session, filtered_events):
     def pass_reception_plot():
         player_id = input.selected_rice_player()
         df = filtered_events()
-        df_filtered = df[df['pass_recipient_id'] == int(float(player_id))]
-        if df_filtered is None or df_filtered.empty:
+        if _no_plot_data(player_id, df):
             return None
-        pass_received_df = df_filtered[
-            (df_filtered["type_primary"] == "pass")]
-        
+        df_filtered = df[df['pass_recipient_id'] == int(float(player_id))]
+        if df_filtered.empty:
+            return None
+        pass_received_df = df_filtered[df_filtered["type_primary"] == "pass"]
+
         pitch = Pitch(pitch_type='wyscout', pitch_color='#aabb97', line_color='white')
         fig, ax = pitch.draw(figsize=(10, 7))
         if not pass_received_df.empty:
             pitch.scatter(
-                pass_received_df["pass_end_location_x"], 
-                pass_received_df["pass_end_location_y"], 
-                ax=ax, 
-                color="red", 
-                edgecolors="black", 
+                pass_received_df["pass_end_location_x"],
+                pass_received_df["pass_end_location_y"],
+                ax=ax,
+                color="red",
+                edgecolors="black",
                 label="Pass received"
             )
             ax.legend(loc='upper right')
-        
-            ax.set_title("loc of passes received", fontsize=15)
-            return fig
 
-        
+        ax.set_title("loc of passes received", fontsize=15)
+        return fig

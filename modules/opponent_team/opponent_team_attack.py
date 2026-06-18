@@ -12,7 +12,7 @@ def attack_ui():
     return ui.div(
         ui.output_plot("goal_scatter_plot"),
         ui.output_plot("radar_plot"),
-        ui.output_plot("key_passes_plot"),
+        ui.output_plot("key_passes_plot_opp"),
         ui.output_plot("crosses_plot"),
         ui.output_plot("momentum_plot")
     )
@@ -88,7 +88,7 @@ def attack_server(input, output, session, filtered_events, events_df, team_names
         
         return fig
     @render.plot
-    def key_passes_plot():
+    def key_passes_plot_opp():
         df = filtered_events()
 
         if df is None or df.empty:

@@ -133,42 +133,110 @@ def attack_heatmap_server(input, output, session, filtered_events):
             thresh=0.10,
         )
 
-        ax.set_title("Attacking Activity Heatmap", fontsize=15)
+        ax.set_title("Activity Heatmap", fontsize=15)
         return fig
 
 def progressive_passes_ui():
     return ui.div(
-        ui.output_plot("progressive_passes_plot")
+        ui.output_plot("progressive_passes_plot_own_third"),
+        ui.output_plot("progressive_passes_plot_middle_third"),
+        ui.output_plot("progressive_passes_plot_final_third"),
     )
 
+def progressive_passes_ui():
+    return ui.div(
+        ui.output_plot("progressive_passes_plot_own_third"),
+        ui.output_plot("progressive_passes_plot_middle_third"),
+        ui.output_plot("progressive_passes_plot_final_third"),
+    )
+ 
+ 
+def progressive_passes_ui():
+    return ui.div(
+        ui.output_plot("progressive_passes_plot_own_third"),
+        ui.output_plot("progressive_passes_plot_middle_third"),
+        ui.output_plot("progressive_passes_plot_final_third"),
+    )
+ 
+ 
 def progressive_passes_server(input, output, session, filtered_events):
-    @render.plot
-    def progressive_passes_plot():
-        df = filtered_events()
-        if df is None or df.empty:
+ 
+    def get_progressive_passes():
+        events = filtered_events()
+        if events is None or events.empty:
             return None
-
-        prog_df = df[
-            df["type_secondary"].str.contains("progressive_pass", case=False, na=False) &
-            (df["pass_accurate"].astype(str).str.upper() == "TRUE")
+        return events[
+            events["type_secondary"].str.contains("progressive_pass", case=False, na=False)
+            & (events["pass_accurate"].astype(str).str.upper() == "TRUE")
         ].copy()
-
-        pitch = Pitch(pitch_type='wyscout', pitch_color='#aabb97', line_color='white')
+ 
+    def draw_progressive_passes_for_third(third_name, third_x_start, third_x_end, legend_position):
+        top_player_colors = ["#E63946", "#2196F3", "#4CAF50", "#FF9800"]
+        other_player_color = "black"
+ 
+        progressive_passes = get_progressive_passes()
+        if progressive_passes is None:
+            return None
+ 
+        pitch = Pitch(pitch_type="wyscout", pitch_color="#aabb97", line_color="white")
         fig, ax = pitch.draw(figsize=(10, 7))
-
-        if prog_df.empty:
-            ax.set_title("Progressive Pass Map", fontsize=15)
-            return fig
-
-        pitch.arrows(
-            prog_df["location_x"], prog_df["location_y"],
-            prog_df["pass_end_location_x"], prog_df["pass_end_location_y"],
-            width=1, headwidth=5, headlength=5,
-            color="black", alpha=0.6, ax=ax
+ 
+        ax.axvline(33.33, color="white", linestyle="--", linewidth=1.2, alpha=0.7)
+        ax.axvline(66.67, color="white", linestyle="--", linewidth=1.2, alpha=0.7)
+ 
+        passes_in_third = progressive_passes[
+            (progressive_passes["location_x"] >= third_x_start) &
+            (progressive_passes["location_x"] <  third_x_end)
+        ]
+ 
+        unique_players_in_third = (
+            passes_in_third["player_name"].value_counts()
+            if not passes_in_third.empty and "player_name" in passes_in_third.columns
+            else []
         )
-
-        ax.set_title(f"Progressive Pass Map (n={len(prog_df)})", fontsize=15)
+ 
+        if len(unique_players_in_third) <= 4:
+            top_players_in_third_by_pass_count = unique_players_in_third.index.tolist()
+            show_other_category = False
+        else:
+            top_players_in_third_by_pass_count = unique_players_in_third.head(3).index.tolist()
+            show_other_category = True
+ 
+        for _, pass_row in passes_in_third.iterrows():
+            arrow_color = (
+                top_player_colors[top_players_in_third_by_pass_count.index(pass_row["player_name"])]
+                if pass_row["player_name"] in top_players_in_third_by_pass_count
+                else other_player_color
+            )
+            pitch.arrows(
+                pass_row["location_x"],          pass_row["location_y"],
+                pass_row["pass_end_location_x"], pass_row["pass_end_location_y"],
+                width=1, headwidth=5, headlength=5,
+                color=arrow_color, alpha=0.6, ax=ax,
+            )
+ 
+        for rank, player_name in enumerate(top_players_in_third_by_pass_count):
+            ax.scatter([], [], color=top_player_colors[rank], label=player_name)
+        if show_other_category:
+            ax.scatter([], [], color=other_player_color, label="Other")
+        ax.legend(loc=legend_position, fontsize=9)
+ 
+        ax.set_title(f"Progressive Pass Map — {third_name} (n={len(passes_in_third)})", fontsize=15)
+ 
         return fig
+ 
+    @render.plot
+    def progressive_passes_plot_own_third():
+        return draw_progressive_passes_for_third("Own Third", 0, 33.33, "upper right")
+ 
+    @render.plot
+    def progressive_passes_plot_middle_third():
+        return draw_progressive_passes_for_third("Middle Third", 33.33, 66.67, "upper left")
+ 
+    @render.plot
+    def progressive_passes_plot_final_third():
+        return draw_progressive_passes_for_third("Final Third", 66.67, 100, "upper left")
+ 
 
 def final_third_passes_ui():
     return ui.div(
@@ -288,6 +356,7 @@ def xg_accumulator_server(input, output, session, filtered_events):
         ax.set_ylabel("Cumulative xG", fontsize=12)
         ax.set_title("xG Accumulator", fontsize=15)
         ax.legend(loc="upper left", fontsize=9)
+        ax.set_xlim(0, 90)
         ax.grid(True, alpha=0.3)
 
         return fig
@@ -335,24 +404,39 @@ def possession_with_shot_server(input, output, session, filtered_events):
         df = filtered_events()
         if df is None or df.empty:
             return None
- 
-        poss = get_possessions_with_shot(df)
-        starts = poss.sort_values("timestamp").groupby("possession_id").first().reset_index()
- 
+
+        df = df.copy()
+        df["timestamp"] = df["timestamp"].apply(parse_timestamp)
+
+        shots = df[df["type_primary"] == "shot"]
+
+        quick_shot_starts = []
+        for poss_id, poss_df in df.groupby("possession_id"):
+            poss_df = poss_df.sort_values("timestamp")
+            poss_start_row = poss_df.iloc[0]
+
+            poss_shots = shots[shots["possession_id"] == poss_id]
+            for _, shot_row in poss_shots.iterrows():
+                if 0 < (shot_row["timestamp"] - poss_start_row["timestamp"]) <= 10:
+                    quick_shot_starts.append(poss_start_row)
+                    break
+
+        starts_df = pd.DataFrame(quick_shot_starts)
+
         pitch = Pitch(pitch_type="wyscout", pitch_color="#aabb97", line_color="white")
         fig, ax = pitch.draw(figsize=(10, 7))
- 
-        if starts.empty:
-            ax.set_title("Possession Start Locations (Led to Shot)", fontsize=15)
+
+        if starts_df.empty:
+            ax.set_title("Possession Start Locations (Shot Within 5s)", fontsize=15)
             return fig
- 
+
         pitch.scatter(
-            starts["location_x"], starts["location_y"],
+            starts_df["location_x"], starts_df["location_y"],
             s=120, color="white", edgecolors="black",
             linewidths=1.2, zorder=4, ax=ax,
         )
- 
-        ax.set_title(f"Possession Start Locations — Led to Shot (n={len(starts)})", fontsize=15)
+
+        ax.set_title(f"Possession Start Locations — Shot Within 10s (n={len(starts_df)})", fontsize=15)
         return fig
 
 def shots_by_15_ui():
@@ -374,21 +458,29 @@ def shots_by_15_server(input, output, session, filtered_events):
         fig.patch.set_facecolor("#f9f9f9")
  
         x_labels = ["0-15", "16-30", "31-45", "46-60", "61-75", "76-90"]
-        x_pos = {label: i for i, label in enumerate(x_labels)}
- 
-        for match_id, match_df in data.groupby("wy_match_id"):
+        x = np.arange(len(x_labels))
+
+        match_ids = data["wy_match_id"].unique()
+        n_matches = len(match_ids)
+        bar_width = 0.8 / n_matches
+
+        for i, match_id in enumerate(match_ids):
+            match_df = data[data["wy_match_id"] == match_id]
             label = f"Rice vs. {match_df['opponent_team_name'].iloc[0]}"
-            x = [x_pos[p] for p in match_df["period_15"].astype(str)]
-            y = list(match_df["shots"])
-            ax.plot(x, y, linewidth=2, marker="o", markersize=6, label=label)
+
+            period_to_shots = dict(zip(match_df["period_15"].astype(str), match_df["shots"]))
+            y = [period_to_shots.get(lbl, 0) for lbl in x_labels]
+
+            offset = (i - (n_matches - 1) / 2) * bar_width
+            ax.bar(x + offset, y, width=bar_width, label=label, edgecolor="white", linewidth=0.5)
  
-        ax.set_xticks(range(len(x_labels)))
+        ax.set_xticks(x)
         ax.set_xticklabels(x_labels)
         ax.legend(loc="upper left", fontsize=9)
- 
-        ax.set_xlabel("Minute", fontsize=12)
+        ax.set_xlabel("Minute Interval", fontsize=12)
         ax.set_ylabel("Shots", fontsize=12)
         ax.set_title("Shots by 15 Minute Interval", fontsize=15)
+        ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
         ax.grid(True, alpha=0.3, axis="y")
  
         return fig
@@ -396,15 +488,15 @@ def shots_by_15_server(input, output, session, filtered_events):
  
 def attack_ui():
     return ui.div(
-        shots_ui(),
-        progressive_passes_ui(),
-        final_third_passes_ui(),
-        progressive_runs_ui(),
-        attack_heatmap_ui(),
         xg_accumulator_ui(),
-        key_passes_ui(),
-        possession_with_shot_ui(),
+        attack_heatmap_ui(),
+        shots_ui(),
         shots_by_15_ui(),
+        possession_with_shot_ui(),
+        progressive_runs_ui(),
+        final_third_passes_ui(),
+        key_passes_ui(),
+        progressive_passes_ui(),
     )
  
 def attack_server(input, output, session, filtered_events):

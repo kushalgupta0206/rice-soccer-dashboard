@@ -52,6 +52,19 @@ def get_match_choices_for_player(map_df, match_df, player_id):
     player_matches_joined = player_matches.merge(match_df, on="wy_match_id", how="left")
     return dict(zip(player_matches_joined["wy_match_id"].astype(str), player_matches_joined["label_date"]))
 
+def _parse_match_ids(raw_matches):
+    if isinstance(raw_matches, (tuple, list)):
+        return [int(float(m)) for m in raw_matches if m]
+    if raw_matches:
+        return [int(float(raw_matches))]
+    return []
+
+def _empty_comparison_result(comp_type):
+    return {
+        "data": pd.DataFrame(),
+        "name_col": "wy_team_name" if comp_type == "team" else "wy_player_name"
+    }
+
 def ui_content():
     return ui.nav_panel(
         "Comparison Tool",
@@ -268,16 +281,13 @@ def server_logic(input, output, session):
 
         for ent in entities:
             c_id = int(float(ent["id"])) if ent["id"] else None
-            
-            c_matches = []
-            raw_m = ent["matches"]
-            if isinstance(raw_m, (tuple, list)):
-                c_matches = [int(float(m)) for m in raw_m if m]
-            elif raw_m:
-                c_matches = [int(float(raw_m))]
+            c_matches = _parse_match_ids(ent["matches"])
+
+            if not c_id or not c_matches:
+                return _empty_comparison_result(comp_type)
 
             temp_df = team_player_duels_df[
-                (team_player_duels_df[group_col] == c_id) & 
+                (team_player_duels_df[group_col] == c_id) &
                 (team_player_duels_df["wy_match_id"].isin(c_matches))
             ]
 
@@ -297,18 +307,21 @@ def server_logic(input, output, session):
 
         df_final = pd.concat(processed_results).fillna(0)
 
+        if df_final.empty or len(df_final) < 2:
+            return _empty_comparison_result(comp_type)
+
         df_final["ground_kept_pct"] = df_final["total_ground_kept"] / df_final["total_off_duels"]
         df_final["ground_prog_pct"] = df_final["total_ground_prog"] / df_final["total_off_duels"]
         df_final["ground_rec_pct"] = df_final["total_ground_rec"] / df_final["total_def_duels"]
         df_final["ground_stop_pct"] = df_final["total_ground_stop"] / df_final["total_def_duels"]
         df_final["aerial_win_pct"] = df_final["total_aerial_touch"] / df_final["total_aerial_count"]
-        
+
         df_final = df_final.fillna(0)
         if input.comparison_type() == "team":
             df_final_joined = df_final.merge(team_df, on="wy_team_id", how="left")
         else:
             df_final_joined = df_final.merge(player_df, on="wy_player_id", how="left")
-        
+
         return {
             "data": df_final_joined,
             "name_col": "wy_team_name" if input.comparison_type() == "team" else "wy_player_name"
